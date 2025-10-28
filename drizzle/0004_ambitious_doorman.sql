@@ -1,0 +1,1 @@
+ALTER TABLE `prayers` ADD `visibilityScope` enum('community','church_only','nearby_churches') DEFAULT 'community' NOT NULL;
