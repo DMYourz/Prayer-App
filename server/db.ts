@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { nanoid } from "nanoid";
 
 import type {
   InsertChurch,
@@ -43,6 +44,17 @@ function notifyMemoryFallback() {
     memoryNoticeShown = true;
   }
 }
+
+const csvEscape = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  const stringValue = String(value);
+  if (stringValue.includes(",") || stringValue.includes("\"") || stringValue.includes("\n")) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
@@ -205,6 +217,32 @@ export async function updatePrayerStatus(id: number, status: "active" | "answere
   }
 
   await db.update(prayers).set({ status }).where(eq(prayers.id, id));
+}
+
+export async function updatePrayerModeration(
+  id: number,
+  moderationStatus: "pending" | "approved" | "flagged" | "rejected",
+  moderatorId: number,
+  notes?: string | null
+) {
+  const db = await getDb();
+  if (!db) {
+    notifyMemoryFallback();
+    return memoryDb.updatePrayerModeration(id, moderationStatus, moderatorId, notes);
+  }
+
+  await db
+    .update(prayers)
+    .set({
+      moderationStatus,
+      moderatedBy: moderatorId,
+      moderatedAt: new Date(),
+      moderationConcerns: notes ?? null,
+    })
+    .where(eq(prayers.id, id));
+
+  const result = await db.select().from(prayers).where(eq(prayers.id, id)).limit(1);
+  return result.length > 0 ? result[0] : null;
 }
 
 // Church queries
@@ -538,4 +576,108 @@ export async function upsertEmailPreferences(prefs: InsertEmailPreference) {
       updatedAt: new Date(),
     },
   });
+}
+
+export async function getNotifications(limit?: number) {
+  const db = await getDb();
+  if (!db) {
+    notifyMemoryFallback();
+    return memoryDb.getNotifications(limit);
+  }
+
+  // Placeholder: implement real notification persistence once DB is wired.
+  console.warn("[Database] Notifications requested but persistence not implemented yet.");
+  return [];
+}
+
+export async function createDemoChurchMember(churchId: number, member: { name?: string; email?: string; role: "member" | "admin" | "pastor" }) {
+  const db = await getDb();
+  if (!db) {
+    notifyMemoryFallback();
+    const openId = member.email ? `demo-${member.email}` : `demo-${nanoid()}`;
+    await memoryDb.upsertUser({
+      openId,
+      name: member.name ?? null,
+      email: member.email ?? null,
+      loginMethod: "demo_invite",
+      role: "user",
+      lastSignedIn: new Date(),
+    });
+
+    const user = await memoryDb.getUserByOpenId(openId);
+    if (!user) {
+      throw new Error("Failed to create demo user for church member");
+    }
+
+    await memoryDb.createChurchMember({
+      churchId,
+      userId: user.id,
+      role: member.role,
+      status: "pending",
+    });
+
+    return user;
+  }
+
+  console.warn("[Database] createDemoChurchMember invoked without implementation on SQL backend.");
+  return null;
+}
+
+export async function exportReviewReport() {
+  const db = await getDb();
+  if (!db) {
+    notifyMemoryFallback();
+    const [pendingChurches, flaggedPrayers] = await Promise.all([
+      memoryDb.getChurches({ status: "pending" }),
+      memoryDb.getPrayers({ moderationStatus: "flagged" }),
+    ]);
+
+    const pendingMembers = await Promise.all(
+      pendingChurches.map(church => memoryDb.getChurchMembers(church.id))
+    ).then(groups => groups.flat().filter(member => member.status !== "verified"));
+
+    const csvLines: string[] = [];
+    csvLines.push("Pending Churches");
+    csvLines.push("Name,City,State,Submitted By,Submitted At");
+    pendingChurches.forEach(church => {
+      csvLines.push([
+        csvEscape(church.name),
+        csvEscape(church.city),
+        csvEscape(church.state),
+        csvEscape(church.submittedBy),
+        csvEscape(church.createdAt.toISOString()),
+      ].join(","));
+    });
+
+    csvLines.push("");
+    csvLines.push("Flagged Prayers");
+    csvLines.push("Title,Urgency,Categories,Submitted At,Flagged At");
+    flaggedPrayers.forEach(prayer => {
+      csvLines.push([
+        csvEscape(prayer.title),
+        csvEscape(prayer.urgency ?? ""),
+        csvEscape(prayer.categories ?? ""),
+        csvEscape(prayer.createdAt.toISOString()),
+        csvEscape(prayer.moderatedAt?.toISOString() ?? ""),
+      ].join(","));
+    });
+
+    csvLines.push("");
+    csvLines.push("Pending Members");
+    csvLines.push("Member ID,Church ID,Role,Status,Requested At");
+    pendingMembers.forEach(member => {
+      csvLines.push([
+        csvEscape(member.id),
+        csvEscape(member.churchId),
+        csvEscape(member.role),
+        csvEscape(member.status),
+        csvEscape(member.createdAt.toISOString()),
+      ].join(","));
+    });
+
+    return csvLines.join("\n");
+  }
+
+  console.warn("[Database] exportReviewReport invoked without SQL backend implementation.");
+  return "";
 }

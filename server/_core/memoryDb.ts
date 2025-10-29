@@ -17,6 +17,17 @@ import {
   type User,
 } from "../../drizzle/schema";
 
+type NotificationType = "church_submitted" | "prayer_flagged" | "prayer_reviewed" | "prayer_status" | "general";
+
+type Notification = {
+  id: number;
+  type: NotificationType;
+  title: string;
+  message: string;
+  createdAt: Date;
+  meta?: Record<string, unknown>;
+};
+
 type IdCounters = {
   prayers: number;
   churches: number;
@@ -26,6 +37,7 @@ type IdCounters = {
   prayerGroupMembers: number;
   users: number;
   emailPreferences: number;
+  notifications: number;
 };
 
 const baseDate = new Date();
@@ -39,6 +51,7 @@ const inMemoryData = {
   prayerGroupMembers: [] as PrayerGroupMember[],
   users: [] as User[],
   emailPreferences: [] as EmailPreference[],
+  notifications: [] as Notification[],
 };
 
 const counters: IdCounters = {
@@ -50,6 +63,7 @@ const counters: IdCounters = {
   prayerGroupMembers: 0,
   users: 0,
   emailPreferences: 0,
+  notifications: 0,
 };
 
 const cloneDate = (date: Date) => new Date(date.getTime());
@@ -101,6 +115,17 @@ const caringUser = addSampleUser({
   createdAt: addDays(baseDate, -21),
   updatedAt: addDays(baseDate, -2),
   lastSignedIn: addDays(baseDate, -2),
+});
+
+const ariseLeader = addSampleUser({
+  openId: "arise-demo",
+  name: "Pastor Lily Bennett",
+  email: "lily.bennett@arisecbrandon.org",
+  loginMethod: "dev",
+  role: "user",
+  createdAt: addDays(baseDate, -60),
+  updatedAt: addDays(baseDate, -3),
+  lastSignedIn: addDays(baseDate, -3),
 });
 
 const addSampleChurch = (church: Omit<Church, "id">) => {
@@ -155,6 +180,27 @@ const mercyBridge = addSampleChurch({
   updatedAt: addDays(baseDate, -5),
 });
 
+const ariseBrandon = addSampleChurch({
+  name: "Arise Church of Brandon",
+  description:
+    "Vibrant Brandon-area congregation focused on worship, family discipleship, and community outreach nights.",
+  address: "1520 Sunrise Ridge Road",
+  city: "Brandon",
+  state: "FL",
+  country: "USA",
+  zipCode: "33510",
+  contactEmail: "hello@arisecbrandon.org",
+  contactPhone: "(813) 555-0190",
+  website: "https://arisecbrandon.org",
+  status: "approved",
+  submittedBy: ownerUser.id,
+  reviewedBy: ownerUser.id,
+  reviewNotes: "Local pastors recommended; strong small-group infrastructure.",
+  reviewedAt: addDays(baseDate, -9),
+  createdAt: addDays(baseDate, -58),
+  updatedAt: addDays(baseDate, -4),
+});
+
 addSampleChurch({
   name: "Northside Community Church",
   description:
@@ -206,6 +252,17 @@ addSampleChurchMember({
   verifiedAt: addDays(baseDate, -15),
   createdAt: addDays(baseDate, -45),
   updatedAt: addDays(baseDate, -15),
+});
+
+addSampleChurchMember({
+  churchId: ariseBrandon.id,
+  userId: ariseLeader.id,
+  role: "pastor",
+  status: "verified",
+  verifiedBy: ownerUser.id,
+  verifiedAt: addDays(baseDate, -8),
+  createdAt: addDays(baseDate, -40),
+  updatedAt: addDays(baseDate, -8),
 });
 
 const addSamplePrayerGroup = (group: Omit<PrayerGroup, "id">) => {
@@ -363,6 +420,50 @@ addSamplePrayer({
 });
 
 addSamplePrayer({
+  title: "Community Night Volunteers Needed",
+  content:
+    "Arise Church of Brandon is hosting our monthly Community Night to serve neighbors with meals and prayer. Pray that we gather enough volunteers and for hearts to be open to the gospel conversations planned.",
+  userId: ariseLeader.id,
+  churchId: ariseBrandon.id,
+  groupId: null,
+  isAnonymous: 0,
+  anonymousName: null,
+  isPublic: 1,
+  visibilityScope: "community",
+  status: "active",
+  categories: "Community & Church, Guidance & Decisions",
+  urgency: "medium",
+  moderationStatus: "approved",
+  moderationConcerns: null,
+  moderatedBy: ownerUser.id,
+  moderatedAt: addDays(now, -2),
+  createdAt: addDays(now, -4),
+  updatedAt: addDays(now, -2),
+});
+
+addSamplePrayer({
+  title: "Healing for Brandon Student",
+  content:
+    "One of our middle schoolers, Jenna, is recovering from appendicitis surgery. Please pray for quick healing, pain relief, and for her mom who is balancing hospital visits with work.",
+  userId: null,
+  churchId: ariseBrandon.id,
+  groupId: null,
+  isAnonymous: 1,
+  anonymousName: "Brandon Prayer Team",
+  isPublic: 1,
+  visibilityScope: "community",
+  status: "active",
+  categories: "Health & Healing, Family & Relationships",
+  urgency: "high",
+  moderationStatus: "approved",
+  moderationConcerns: null,
+  moderatedBy: ownerUser.id,
+  moderatedAt: addDays(now, -1),
+  createdAt: addDays(now, -2),
+  updatedAt: addDays(now, -1),
+});
+
+addSamplePrayer({
   title: "Praise Report: Unexpected Provision",
   content:
     "Wanted to share that after months of praying for steady employment, I received an offer this week that perfectly fits our family's rhythms. Thank you for praying — God provided in detail!",
@@ -440,6 +541,16 @@ const nextId = <K extends keyof IdCounters>(key: K) => {
   return counters[key];
 };
 
+const pushNotification = (notification: Omit<Notification, "id" | "createdAt"> & { createdAt?: Date }) => {
+  const record: Notification = {
+    id: nextId("notifications"),
+    createdAt: notification.createdAt ?? new Date(),
+    ...notification,
+  };
+  inMemoryData.notifications.unshift(record);
+  return record;
+};
+
 export const memoryDb = {
   async upsertUser(user: InsertUser) {
     const existing = inMemoryData.users.find(u => u.openId === user.openId);
@@ -497,6 +608,23 @@ export const memoryDb = {
       updatedAt: prayer.updatedAt ?? nowDate,
     };
     inMemoryData.prayers.unshift(record);
+
+    if (record.moderationStatus === "flagged") {
+      pushNotification({
+        type: "prayer_flagged",
+        title: "Prayer flagged for review",
+        message: `“${record.title}” requires moderator attention.`,
+        meta: { prayerId: record.id, urgency: record.urgency },
+      });
+    } else if (record.moderationStatus === "rejected") {
+      pushNotification({
+        type: "prayer_flagged",
+        title: "Prayer automatically rejected",
+        message: `“${record.title}” was blocked by safety filters.`,
+        meta: { prayerId: record.id },
+      });
+    }
+
     return record;
   },
 
@@ -538,7 +666,45 @@ export const memoryDb = {
     if (prayer) {
       prayer.status = status;
       prayer.updatedAt = new Date();
+      pushNotification({
+        type: "prayer_status",
+        title: `Prayer marked ${status}`,
+        message: `“${prayer.title}” is now ${status}.`,
+        meta: { prayerId: prayer.id, status },
+      });
     }
+  },
+
+  async updatePrayerModeration(
+    id: number,
+    status: "pending" | "approved" | "flagged" | "rejected",
+    moderatorId: number,
+    notes?: string | null
+  ) {
+    const prayer = inMemoryData.prayers.find(item => item.id === id);
+    if (prayer) {
+      prayer.moderationStatus = status;
+      prayer.moderatedBy = moderatorId;
+      prayer.moderatedAt = new Date();
+      prayer.moderationConcerns = notes ?? prayer.moderationConcerns;
+
+      const statusTitle =
+        status === "approved"
+          ? "Prayer approved"
+          : status === "flagged"
+            ? "Prayer flagged for manual review"
+            : status === "rejected"
+              ? "Prayer rejected"
+              : "Prayer under review";
+
+      pushNotification({
+        type: "prayer_reviewed",
+        title: statusTitle,
+        message: `“${prayer.title}” marked ${status}.`,
+        meta: { prayerId: prayer.id, status, notes },
+      });
+    }
+    return prayer ?? null;
   },
 
   async createChurch(church: InsertChurch) {
@@ -565,6 +731,14 @@ export const memoryDb = {
       updatedAt: church.updatedAt ?? nowDate,
     };
     inMemoryData.churches.push(record);
+
+    pushNotification({
+      type: "church_submitted",
+      title: "New church submitted",
+      message: `${record.name} is awaiting review.`,
+      meta: { churchId: record.id },
+    });
+
     return record;
   },
 
@@ -635,6 +809,14 @@ export const memoryDb = {
       updatedAt: member.updatedAt ?? nowDate,
     };
     inMemoryData.churchMembers.push(record);
+
+    pushNotification({
+      type: "general",
+      title: "New membership request",
+      message: `User ${record.userId} requested to join church ${record.churchId}.`,
+      meta: { churchId: record.churchId, memberId: record.id, status: record.status },
+    });
+
     return record;
   },
 
@@ -655,6 +837,12 @@ export const memoryDb = {
       member.verifiedBy = verifiedBy;
       member.verifiedAt = new Date();
       member.updatedAt = new Date();
+      pushNotification({
+        type: "general",
+        title: "Member verified",
+        message: `Member ${member.userId} has been verified for church ${member.churchId}.`,
+        meta: { churchId: member.churchId, memberId: member.id },
+      });
     }
   },
 
@@ -758,5 +946,12 @@ export const memoryDb = {
 
   async getEmailPreference(userId: number) {
     return inMemoryData.emailPreferences.find(pref => pref.userId === userId);
+  },
+
+  async getNotifications(limit?: number) {
+    const sorted = [...inMemoryData.notifications].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    );
+    return typeof limit === "number" ? sorted.slice(0, limit) : sorted;
   },
 };

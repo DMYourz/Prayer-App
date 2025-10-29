@@ -3,8 +3,9 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { getSessionCookieOptions } from "./_core/cookies";
+import { ENV } from "./_core/env";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure,publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
 export const appRouter = router({
   system: systemRouter,
@@ -127,6 +128,41 @@ export const appRouter = router({
         }
         
         return updatePrayerStatus(input.id, input.status);
+      }),
+
+    listForModeration: adminProcedure
+      .input(z.object({
+        status: z.enum(["pending", "approved", "flagged", "rejected"]).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const { getPrayers } = await import("./db");
+        return getPrayers({
+          moderationStatus: input?.status,
+          limit: 200,
+          offset: 0,
+        });
+      }),
+
+    moderate: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(["pending", "approved", "flagged", "rejected"]),
+        notes: z.string().max(500).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { updatePrayerModeration } = await import("./db");
+        const updated = await updatePrayerModeration(
+          input.id,
+          input.status,
+          ctx.user.id,
+          input.notes ?? null
+        );
+
+        if (!updated) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Prayer not found" });
+        }
+
+        return updated;
       }),
   }),
 
@@ -451,6 +487,28 @@ export const appRouter = router({
       .query(async ({ ctx }) => {
         const { getUserChurches } = await import("./db");
         return await getUserChurches(ctx.user.id);
+      }),
+
+    demoAdd: adminProcedure
+      .input(z.object({
+        churchId: z.number(),
+        name: z.string().min(1),
+        email: z.string().email().optional(),
+        role: z.enum(["member", "admin", "pastor"]).default("member"),
+      }))
+      .mutation(async ({ input }) => {
+        if (!ENV.demoMode) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Demo member creation is disabled" });
+        }
+
+        const { createDemoChurchMember } = await import("./db");
+        await createDemoChurchMember(input.churchId, {
+          name: input.name,
+          email: input.email,
+          role: input.role,
+        });
+
+        return { success: true } as const;
       }),
   }),
 

@@ -19,6 +19,7 @@ VITE_ANALYTICS_WEBSITE_ID=your-site-id
 - `VITE_ANALYTICS_ENDPOINT` + `VITE_ANALYTICS_WEBSITE_ID` enable Umami analytics (optional). When both are defined the lightweight tracking script is injected automatically.
 - `DATABASE_URL` is optional for local development. If it is missing, the server uses curated in-memory sample data so the UI still feels alive.
 - `OWNER_OPEN_ID` promotes a Manus user to `admin` automatically after the first login.
+- `VITE_DEMO_MODE` (client) and `DEMO_MODE` (server) let you enable the preview “auto-admin” experience so protected routes stay usable without real auth.
 
 #### Quick checklist to validate OAuth locally
 

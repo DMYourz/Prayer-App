@@ -1,4 +1,4 @@
-import { ArrowLeft,Church as ChurchIcon } from "lucide-react";
+import { ArrowLeft, Church as ChurchIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
@@ -9,11 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { APP_TITLE, getLoginUrl } from "@/const";
+import { APP_TITLE, getLoginUrl,IS_DEMO_MODE } from "@/const";
 import { trpc } from "@/lib/trpc";
 
 export default function SubmitChurch() {
   const { isAuthenticated } = useAuth();
+  const canSubmit = isAuthenticated || IS_DEMO_MODE;
   const [, setLocation] = useLocation();
   const [formData, setFormData] = useState({
     name: "",
@@ -64,7 +65,7 @@ export default function SubmitChurch() {
     });
   };
 
-  if (!isAuthenticated) {
+  if (!canSubmit) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <nav className="border-b border-border bg-card/50 backdrop-blur-sm">
@@ -121,6 +122,11 @@ export default function SubmitChurch() {
               <p className="text-lg text-muted-foreground">
                 Submit your church for review to join our prayer network. All submissions are reviewed by our team.
               </p>
+              {IS_DEMO_MODE && (
+                <p className="mt-4 text-sm text-primary">
+                  Preview mode: you don&apos;t need an account to try this flow. We&apos;ll route your submission to the demo review queue.
+                </p>
+              )}
             </div>
 
             <Card className="border-border/50">
@@ -291,4 +297,3 @@ export default function SubmitChurch() {
     </div>
   );
 }
-

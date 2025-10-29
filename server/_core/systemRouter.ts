@@ -27,4 +27,20 @@ export const systemRouter = router({
         success: delivered,
       } as const;
     }),
+
+  notifications: adminProcedure
+    .input(z.object({ limit: z.number().min(1).max(100).optional() }).optional())
+    .query(async ({ input }) => {
+      const { getNotifications } = await import("../db");
+      return getNotifications(input?.limit);
+    }),
+
+  exportReviewData: adminProcedure.mutation(async () => {
+    const { exportReviewReport } = await import("../db");
+    const csv = await exportReviewReport();
+    return {
+      csv,
+      generatedAt: new Date().toISOString(),
+    } as const;
+  }),
 });

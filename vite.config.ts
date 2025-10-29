@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => {
     VITE_APP_LOGO: "/logo.png",
     VITE_ANALYTICS_ENDPOINT: "",
     VITE_ANALYTICS_WEBSITE_ID: "",
+    VITE_DEMO_MODE: "true",
   };
 
   for (const [key, value] of Object.entries(defaults)) {

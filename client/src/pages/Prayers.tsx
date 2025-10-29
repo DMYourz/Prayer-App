@@ -14,10 +14,13 @@ import { trpc } from "@/lib/trpc";
 const isDefined = <T,>(value: T | null | undefined): value is T =>
   value !== null && value !== undefined;
 
+type UrgencyFilter = "all" | "high" | "medium" | "low";
+
 export default function Prayers() {
   const [offset, setOffset] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [urgencyFilter, setUrgencyFilter] = useState<UrgencyFilter>("all");
   const limit = 20;
 
   const { data: prayers, isLoading } = trpc.prayers.list.useQuery({
@@ -47,7 +50,12 @@ export default function Prayers() {
 
   const isShowingSearchResults = Boolean(searchQuery.trim() && searchResults);
   const displayPrayers = isShowingSearchResults ? searchResults : prayers;
-  const normalizedPrayers = (displayPrayers ?? []).filter(isDefined);
+  const normalizedPrayers = (displayPrayers ?? [])
+    .filter(isDefined)
+    .filter(prayer => {
+      if (urgencyFilter === "all") return true;
+      return prayer.urgency === urgencyFilter;
+    });
   const totalPrayers = normalizedPrayers.length;
   const formatUrgency = (urgency?: string | null) => {
     if (!urgency) return null;
@@ -83,6 +91,18 @@ export default function Prayers() {
       year: "numeric",
     });
   };
+
+  const urgencyCounts = (displayPrayers ?? [])
+    .filter(isDefined)
+    .reduce(
+      (acc, prayer) => {
+        if (prayer.urgency) {
+          acc[prayer.urgency] = (acc[prayer.urgency] ?? 0) + 1;
+        }
+        return acc;
+      },
+      {} as Record<"low" | "medium" | "high", number>
+    );
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -171,6 +191,31 @@ export default function Prayers() {
                 </Button>
               )}
             </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <span className="text-sm text-muted-foreground">Urgency:</span>
+              {["all", "high", "medium", "low"].map((option) => {
+                const label = option === "all" ? "All" : option === "high" ? "Urgent" : option === "medium" ? "Needs prayer" : "On our hearts";
+                const count = option === "all" ? totalPrayers : urgencyCounts[option as Exclude<typeof normalizedPrayers[number]["urgency"], null>] ?? 0;
+                return (
+                  <Button
+                    key={option}
+                    variant={urgencyFilter === option ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setUrgencyFilter(option as UrgencyFilter);
+                      setOffset(0);
+                    }}
+                    className="capitalize"
+                  >
+                    {label}
+                    <Badge variant={urgencyFilter === option ? "secondary" : "outline"} className="ml-2">
+                      {count ?? 0}
+                    </Badge>
+                  </Button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </section>
@@ -245,6 +290,24 @@ export default function Prayers() {
                             <Clock className="h-4 w-4" />
                             <span>{formatDate(prayer.createdAt)}</span>
                           </div>
+                          {prayer.urgency && (
+                            <Badge
+                              variant={
+                                prayer.urgency === "high"
+                                  ? "destructive"
+                                  : prayer.urgency === "medium"
+                                    ? "default"
+                                    : "outline"
+                              }
+                              className="ml-auto capitalize"
+                            >
+                              {prayer.urgency === "high"
+                                ? "Urgent"
+                                : prayer.urgency === "medium"
+                                  ? "Needs prayer"
+                                  : "On our hearts"}
+                            </Badge>
+                          )}
                         </div>
                       </CardHeader>
                     </Card>

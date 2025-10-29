@@ -14,7 +14,8 @@
 ## Admin-only flow (requires OAuth configured)
 1. Sign in with a Manus account whose OpenID matches `OWNER_OPEN_ID`.
 2. Visit `/admin` and review the church approval experience; approve/reject a pending church and note any confusing copy.
-3. Confirm answered-prayer updates propagate back to the main list.
+3. Work through the moderation queue: approve, keep flagged, and reject flagged prayers; watch the Activity feed update.
+4. Confirm answered-prayer updates propagate back to the main list.
 
 ## Capturing feedback
 - Record findings in your shared tracking doc or drop them in `todo.md` with a `QA:` prefix for easy triage.

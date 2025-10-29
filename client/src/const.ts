@@ -6,6 +6,8 @@ export const APP_LOGO =
   import.meta.env.VITE_APP_LOGO ||
   "/logo.png";
 
+export const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
+
 // Generate login URL at runtime so redirect URI reflects the current origin.
 export const getLoginUrl = () => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
